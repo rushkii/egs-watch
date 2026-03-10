@@ -6,7 +6,7 @@ func (s *Scheduler) PrepareJobs() {
 		s.TriggerCleanup()
 	})
 
-	s.Cron.AddFunc(RUN_EVERY_3DAYS_AT_0AM, func() {
+	s.Cron.AddFunc(RUN_EVERY_DAY_AT_5AM, func() {
 		// get free games update from the Epic Games Store API
 		s.TriggerCrawlFreeGamesData()
 	})
