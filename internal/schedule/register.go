@@ -11,7 +11,7 @@ func (s *Scheduler) PrepareJobs() {
 		s.TriggerCrawlFreeGamesData()
 	})
 
-	s.Cron.AddFunc(RUN_EVERY_DAY_AT_10AM, func() {
+	s.Cron.AddFunc(RUN_EVERY_HOUR, func() {
 		// send free games update to the WhatsApp
 		s.TriggerSendFreeGamesUpdate()
 	})
