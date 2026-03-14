@@ -19,7 +19,7 @@ var (
 
 func init() {
 	if err := godotenv.Load(".env"); err != nil {
-		log.Println("Warning: .env file not found, using default values")
+		log.Printf("Warning: .env file not found, using default values\n%v\n", err)
 	}
 
 	SessionString = getEnv("SESSION_STRING", "file:sessions/bot.db?_foreign_keys=on")

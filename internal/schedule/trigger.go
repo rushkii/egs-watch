@@ -20,13 +20,13 @@ func (s *Scheduler) TriggerSendFreeGamesUpdate() {
 
 	target, err := types.ParseJID(config.TargetGroupId)
 	if err != nil {
-		log.Println("Error parsing JID:", err)
+		log.Printf("Error parsing JID: %v", err)
 		return
 	}
 
 	freeGames, err := s.Repo.GetFreeGamesFromDB()
 	if err != nil {
-		log.Println("Error fetching free games:", err)
+		log.Printf("Error fetching free games: %v", err)
 		return
 	}
 
@@ -46,13 +46,13 @@ func (s *Scheduler) TriggerSendFreeGamesUpdate() {
 
 		img, err := s.Http.Download(imageUrl)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Error downloading image from EGS: %v", err)
 			continue
 		}
 
 		uploaded, err := s.WhatsApp.Upload(context.Background(), img, whatsmeow.MediaImage)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Error uploading image to WhatsApp: %v", err)
 			continue
 		}
 
@@ -60,7 +60,7 @@ func (s *Scheduler) TriggerSendFreeGamesUpdate() {
 
 		thumbnail, errThumb := pkg.GenerateThumbnail(img, 200)
 		if errThumb != nil {
-			fmt.Printf("Warning: couldn't generate thumbnail: %v\n", errThumb)
+			log.Printf("Warning: couldn't generate thumbnail: %v\n", errThumb)
 		}
 
 		imgMsg := &waE2E.ImageMessage{
@@ -83,14 +83,14 @@ func (s *Scheduler) TriggerSendFreeGamesUpdate() {
 		})
 
 		if err := s.Repo.InsertUpdateSent(fg.ID); err != nil {
-			log.Println("Error inserting the free games update sent:", err)
+			log.Printf("Error inserting the free games update sent: %v\n", err)
 		}
 	}
 
 	for _, msg := range messages {
 		_, err = s.WhatsApp.SendMessage(ctx, target, msg)
 		if err != nil {
-			log.Println("Error sending message:", err)
+			log.Printf("Error sending message: %v\n", err)
 		}
 	}
 
@@ -115,7 +115,7 @@ func (s *Scheduler) TriggerCleanup() {
 
 	result, err := s.Repo.CleanupFreeGames()
 	if err != nil {
-		log.Println("Error cleaning up stale games: %v\n", err)
+		log.Printf("Error cleaning up stale games: %v\n", err)
 	}
 
 	log.Printf("Cleanup complete. Deleted %d stale games.\n", result)

@@ -26,14 +26,14 @@ func init() {
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Println(err)
+			log.Printf("Error while trying to create a directory: %v\n", err)
 		}
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		f, err := os.Create(path)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Error while creating a file: %v\n", err)
 			return
 		}
 		f.Close()
