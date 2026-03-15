@@ -28,9 +28,7 @@ func New() (*WhatsApp, error) {
 		// Http:   pkg.NewClient(),
 	}
 
-	client.AddEventHandler(func(evt any) {
-		client.EventHandler(evt)
-	})
+	client.AddEventHandler(client.EventHandler)
 
 	if client.Store.ID == nil {
 		err = client.printQR()
