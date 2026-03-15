@@ -1,10 +1,19 @@
 package whatsapp
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/rushkii/egs-watch/internal/epic"
+	"github.com/rushkii/egs-watch/pkg"
+	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types/events"
+	"google.golang.org/protobuf/proto"
 )
 
 func (client *WhatsApp) EventHandler(evt any) {
@@ -33,79 +42,101 @@ func (client *WhatsApp) EventHandler(evt any) {
 
 func (client *WhatsApp) handleCommand(v *events.Message, text string) {
 	switch strings.TrimSpace(text) {
-	// case "/test":
-	// 	if isKizu(v) {
-	// 		client.cmdTest(v)
-	// 	}
+	case "/test":
+		if isKizu(v) {
+			client.cmdTest(v)
+		}
 	}
 }
 
-// func (client *WhatsApp) cmdTest(v *events.Message) {
-// 	freeGames, err := client.Game.GetFreeGamesFromEGS()
-// 	if err != nil {
-// 		log.Println("Error fetching free games:", err)
-// 		return
-// 	}
+func (client *WhatsApp) cmdTest(v *events.Message) {
+	network := pkg.NewClient()
+	game := epic.NewEpicGames(network)
 
-// 	now, upcoming := epic.FormatFreeAllGames(freeGames)
-// 	result := fmt.Sprintf("%s\n%s", now, upcoming)
-// 	ctx := context.Background()
+	freeGames, err := game.GetFreeGamesFromEGS()
+	if err != nil {
+		log.Println("Error fetching free games:", err)
+		return
+	}
 
-// 	log.Println("free games has been formatted")
+	now, upcoming := epic.FormatFreeAllGames(freeGames)
+	result := fmt.Sprintf("%s\n%s", now, upcoming)
 
-// 	var messages []*waE2E.Message
+	ctx := context.Background()
+	chat := v.Info.Chat
 
-// 	for index, fg := range freeGames.Now {
-// 		fmt.Printf("attempt to send image %d of %d\n", index+1, len(freeGames.Now))
-// 		imageUrl := epic.GetImageWide(fg.KeyImages)
+	items := make([]*waE2E.ImageMessage, len(freeGames.Now))
+	var wg sync.WaitGroup
 
-// 		img, err := client.Http.Download(imageUrl)
-// 		if err != nil {
-// 			log.Println(err)
-// 			continue
-// 		}
+	for i, fg := range freeGames.Now {
+		wg.Add(1)
+		go client.processGameImage(&wg, i, ctx, network, fg, items)
+	}
 
-// 		fmt.Printf("downloaded image %d of %d\n", index+1, len(freeGames.Now))
+	wg.Wait()
 
-// 		uploaded, err := client.Upload(context.Background(), img, whatsmeow.MediaImage)
-// 		if err != nil {
-// 			log.Println(err)
-// 			continue
-// 		}
+	var albumItems []any
+	captionSet := false
 
-// 		mimetype := http.DetectContentType(img)
-// 		fmt.Printf("uploaded image %d of %d\n", index+1, len(freeGames.Now))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
 
-// 		thumbnail, errThumb := pkg.GenerateThumbnail(img, 200)
-// 		if errThumb != nil {
-// 			fmt.Printf("Warning: couldn't generate thumbnail: %v\n", errThumb)
-// 		}
+		if !captionSet {
+			item.Caption = proto.String(result)
+			captionSet = true
+		}
 
-// 		imgMsg := &waE2E.ImageMessage{
-// 			Mimetype:      proto.String(mimetype),
-// 			URL:           &uploaded.URL,
-// 			DirectPath:    &uploaded.DirectPath,
-// 			MediaKey:      uploaded.MediaKey,
-// 			FileEncSHA256: uploaded.FileEncSHA256,
-// 			FileSHA256:    uploaded.FileSHA256,
-// 			FileLength:    &uploaded.FileLength,
-// 			JPEGThumbnail: thumbnail,
-// 		}
+		albumItems = append(albumItems, item)
+	}
 
-// 		if index == len(freeGames.Now)-1 {
-// 			imgMsg.Caption = proto.String(result)
-// 		}
+	if len(albumItems) != 0 {
+		err = client.SendMedia(ctx, chat, albumItems...)
+		if err != nil {
+			log.Printf("Failed to send album: %v", err)
+		}
+	}
+}
 
-// 		messages = append(messages, &waE2E.Message{
-// 			ImageMessage: imgMsg,
-// 		})
-// 	}
+func (client *WhatsApp) processGameImage(
+	wg *sync.WaitGroup, index int,
+	ctx context.Context,
+	network *pkg.HttpClient,
+	game epic.FGElement,
+	items []*waE2E.ImageMessage,
+) {
+	defer wg.Done()
 
-// 	for index, msg := range messages {
-// 		_, err = client.SendMessage(ctx, v.Info.Chat, msg)
-// 		if err != nil {
-// 			log.Println("Error sending message:", err)
-// 		}
-// 		fmt.Printf("sent message %d of %d\n", index+1, len(freeGames.Now))
-// 	}
-// }
+	imageUrl := epic.GetImageWide(game.KeyImages)
+	img, err := network.Download(imageUrl)
+	if err != nil {
+		log.Printf("Error downloading image %d: %v\n", index+1, err)
+		return
+	}
+
+	uploaded, err := client.Upload(ctx, img, whatsmeow.MediaImage)
+	if err != nil {
+		log.Printf("Error uploading image %d: %v\n", index+1, err)
+		return
+	}
+
+	mimetype := http.DetectContentType(img)
+	thumbnail, errThumb := pkg.GenerateThumbnail(img, 200)
+	if errThumb != nil {
+		log.Printf("Warning: couldn't generate thumbnail for %d: %v\n", index+1, errThumb)
+	}
+
+	imgMsg := &waE2E.ImageMessage{
+		Mimetype:      proto.String(mimetype),
+		URL:           &uploaded.URL,
+		DirectPath:    &uploaded.DirectPath,
+		MediaKey:      uploaded.MediaKey,
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    &uploaded.FileLength,
+		JPEGThumbnail: thumbnail,
+	}
+
+	items[index] = imgMsg
+}
