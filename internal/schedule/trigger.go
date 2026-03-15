@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/rushkii/egs-watch/internal/config"
 	"github.com/rushkii/egs-watch/internal/repository"
@@ -39,62 +40,93 @@ func (s *Scheduler) TriggerSendFreeGamesUpdate() {
 	result := fmt.Sprintf("%s\n%s", now, upcoming)
 	ctx := context.Background()
 
-	var messages []*waE2E.Message
+	items := make([]*waE2E.ImageMessage, len(freeGames.Now))
+	fgids := make([]string, len(freeGames.Now))
+	var wg sync.WaitGroup
 
-	for index, fg := range freeGames.Now {
-		imageUrl := repository.GetImageWide(fg.Images)
-
-		img, err := s.Http.Download(imageUrl)
-		if err != nil {
-			log.Printf("Error downloading image from EGS: %v", err)
-			continue
-		}
-
-		uploaded, err := s.WhatsApp.Upload(context.Background(), img, whatsmeow.MediaImage)
-		if err != nil {
-			log.Printf("Error uploading image to WhatsApp: %v", err)
-			continue
-		}
-
-		mimetype := http.DetectContentType(img)
-
-		thumbnail, errThumb := pkg.GenerateThumbnail(img, 200)
-		if errThumb != nil {
-			log.Printf("Warning: couldn't generate thumbnail: %v\n", errThumb)
-		}
-
-		imgMsg := &waE2E.ImageMessage{
-			Mimetype:      proto.String(mimetype),
-			URL:           &uploaded.URL,
-			DirectPath:    &uploaded.DirectPath,
-			MediaKey:      uploaded.MediaKey,
-			FileEncSHA256: uploaded.FileEncSHA256,
-			FileSHA256:    uploaded.FileSHA256,
-			FileLength:    &uploaded.FileLength,
-			JPEGThumbnail: thumbnail,
-		}
-
-		if index == len(freeGames.Now)-1 {
-			imgMsg.Caption = proto.String(result)
-		}
-
-		messages = append(messages, &waE2E.Message{
-			ImageMessage: imgMsg,
-		})
-
-		if err := s.Repo.InsertUpdateSent(fg.ID); err != nil {
-			log.Printf("Error inserting the free games update sent: %v\n", err)
-		}
+	for i, fg := range freeGames.Now {
+		fgids[i] = fg.ID
+		wg.Add(1)
+		go s.processGameImage(&wg, i, ctx, fg, items)
 	}
 
-	for _, msg := range messages {
-		_, err = s.WhatsApp.SendMessage(ctx, target, msg)
+	wg.Wait()
+
+	var albumItems []any
+	var validFgids []string
+	captionSet := false
+
+	for i, item := range items {
+		if item == nil {
+			continue
+		}
+
+		if !captionSet {
+			item.Caption = proto.String(result)
+			captionSet = true
+		}
+
+		albumItems = append(albumItems, item)
+		validFgids = append(validFgids, fgids[i])
+	}
+
+	if len(albumItems) != 0 {
+		err = s.WhatsApp.SendMedia(ctx, target, albumItems...)
 		if err != nil {
-			log.Printf("Error sending message: %v\n", err)
+			log.Printf("Failed to send media: %v", err)
+		}
+
+		for _, fgid := range validFgids {
+			if err := s.Repo.InsertUpdateSent(fgid); err != nil {
+				log.Printf("Error inserting the free games update sent: %v\n", err)
+			}
 		}
 	}
 
 	log.Println("Cron triggered: Free Games update has been sent!")
+}
+
+func (s *Scheduler) processGameImage(
+	wg *sync.WaitGroup, index int,
+	ctx context.Context,
+	game repository.FreeGamesFromDB,
+	items []*waE2E.ImageMessage,
+) {
+	defer wg.Done()
+
+	log.Printf("Processing image %d\n", index+1)
+	imageUrl := repository.GetImageWide(game.Images)
+
+	img, err := s.Http.Download(imageUrl)
+	if err != nil {
+		log.Printf("Error downloading image %d: %v\n", index+1, err)
+		return
+	}
+
+	uploaded, err := s.WhatsApp.Upload(ctx, img, whatsmeow.MediaImage)
+	if err != nil {
+		log.Printf("Error uploading image %d: %v\n", index+1, err)
+		return
+	}
+
+	mimetype := http.DetectContentType(img)
+	thumbnail, errThumb := pkg.GenerateThumbnail(img, 200)
+	if errThumb != nil {
+		log.Printf("Warning: couldn't generate thumbnail for %d: %v\n", index+1, errThumb)
+	}
+
+	imgMsg := &waE2E.ImageMessage{
+		Mimetype:      proto.String(mimetype),
+		URL:           &uploaded.URL,
+		DirectPath:    &uploaded.DirectPath,
+		MediaKey:      uploaded.MediaKey,
+		FileEncSHA256: uploaded.FileEncSHA256,
+		FileSHA256:    uploaded.FileSHA256,
+		FileLength:    &uploaded.FileLength,
+		JPEGThumbnail: thumbnail,
+	}
+
+	items[index] = imgMsg
 }
 
 func (s *Scheduler) TriggerCrawlFreeGamesData() error {
