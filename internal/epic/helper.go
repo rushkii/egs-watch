@@ -22,7 +22,7 @@ func FormatFreeAllGames(result FreeGamesFiltered) (string, string) {
 
 	var now, upcoming string
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		msg := <-resultsChan
 		switch msg.Type {
 		case "NOW":
