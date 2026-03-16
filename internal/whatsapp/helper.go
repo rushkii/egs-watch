@@ -2,6 +2,8 @@ package whatsapp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -58,4 +60,42 @@ func (client *WhatsApp) processGameImage(
 	}
 
 	items[index] = imgMsg
+}
+
+func processButtons(buttons []*waE2E.ButtonsMessage_Button) []*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton {
+	processed := make([]*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton, 0, len(buttons))
+
+	for i, btn := range buttons {
+		if btn.NativeFlowInfo != nil &&
+			btn.NativeFlowInfo.Name != nil &&
+			btn.NativeFlowInfo.ParamsJSON != nil {
+			processed = append(processed, &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
+				Name:             btn.NativeFlowInfo.Name,
+				ButtonParamsJSON: btn.NativeFlowInfo.ParamsJSON,
+			})
+			continue
+		}
+
+		displayText := fmt.Sprintf("Button %d", i+1)
+		if btn.ButtonText.GetDisplayText() != "" {
+			displayText = btn.ButtonText.GetDisplayText()
+		}
+
+		id := fmt.Sprintf("id_%d", i+1)
+		if btn.GetButtonID() != "" {
+			id = btn.GetButtonID()
+		}
+
+		paramsJSON, _ := json.Marshal(map[string]string{
+			"display_text": displayText,
+			"id":           id,
+		})
+
+		processed = append(processed, &waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{
+			Name:             proto.String("quick_reply"),
+			ButtonParamsJSON: proto.String(string(paramsJSON)),
+		})
+	}
+
+	return processed
 }
