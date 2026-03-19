@@ -440,9 +440,10 @@ func (r *gamesRepository) GetFreeGamesFromDB() (FreeGamesFilteredFromDB, error) 
 	filtered.All = freeGames
 
 	for _, fg := range freeGames {
-		if fg.Period == "current" {
+		switch fg.Period {
+		case "current":
 			filtered.Now = append(filtered.Now, fg)
-		} else if fg.Period == "upcoming" {
+		case "upcoming":
 			filtered.Upcoming = append(filtered.Upcoming, fg)
 		}
 	}
