@@ -28,6 +28,7 @@ func NewCron(repo *repository.Repository, wa *whatsapp.WhatsApp, game *epic.Epic
 
 func (s *Scheduler) Start() {
 	s.Cron.Start()
+	s.TriggerCrawlFreeGamesData()
 	s.TriggerSendFreeGamesUpdate()
 }
 
