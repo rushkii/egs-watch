@@ -313,22 +313,47 @@ func (r *gamesRepository) InsertUpdateSent(freeGameID string) error {
 
 func (r *gamesRepository) SelectFreeGames() ([]FreeGamesFromDB, error) {
 	query := `
+		WITH GameImages AS (
+			SELECT
+				free_game_id,
+				json_agg(json_build_object('type', image_type, 'url', url)) AS images
+			FROM
+				free_game_images
+			WHERE
+				image_type IN ('OfferImageWide', 'Thumbnail')
+			GROUP BY
+				free_game_id
+		),
+		UniquePromotions AS (
+			SELECT DISTINCT
+				free_game_id,
+				promo_tier,
+				start_date,
+				end_date
+			FROM
+				free_game_promotions
+		),
+		UniqueMappings AS (
+			SELECT DISTINCT
+				free_game_id,
+				slug
+			FROM
+				free_game_mappings
+		)
 		SELECT
 			fg.id,
-			fg.epic_game_id game_id,
+			fg.epic_game_id AS game_id,
 			fg.namespace,
 			fg.title,
 			fg.description,
 			fg.offer_type,
 			fg.status,
 			fg.requires_redemption_code,
-			s."name" seller,
-			d."name" developer,
+			s."name" AS seller,
+			d."name" AS developer,
 			fgm.slug,
-			json_agg(
-				json_build_object('type', image_type, 'url', url)
-			) AS images,
-			fgp.promo_tier period,
+			fgi.images,
+			fgp.promo_tier AS period,
 			fg.fmt_original_price,
 			fg.fmt_discount_price,
 			fg.fmt_intermediate_price,
@@ -336,45 +361,26 @@ func (r *gamesRepository) SelectFreeGames() ([]FreeGamesFromDB, error) {
 			fgp.end_date
 		FROM
 			free_games fg
-		LEFT JOIN sellers s ON
-			s.id = fg.seller_id
-		LEFT JOIN developers d ON
-			d.id = fg.developer_id
-		LEFT JOIN free_game_images fgi ON
-			fgi.free_game_id = fg.id
-		LEFT JOIN free_game_mappings fgm ON
-			fgm.free_game_id = fg.id
-		JOIN free_game_promotions fgp ON
-			fgp.free_game_id = fg.id
-		LEFT JOIN free_games_sent fgs ON
-			fgs.free_game_id = fg.id
+		JOIN
+			GameImages fgi ON fgi.free_game_id = fg.id
+		JOIN
+			UniquePromotions fgp ON fgp.free_game_id = fg.id
+		LEFT JOIN
+			sellers s ON s.id = fg.seller_id
+		LEFT JOIN
+			developers d ON d.id = fg.developer_id
+		LEFT JOIN
+			UniqueMappings fgm ON fgm.free_game_id = fg.id
 		WHERE
 			fg.offer_type = 'BASE_GAME'
 			AND fg.requires_redemption_code = FALSE
-			AND fgi.image_type IN (
-				'OfferImageWide', 'Thumbnail'
+			AND NOT EXISTS (
+				SELECT 1 FROM free_games_sent fgs WHERE fgs.free_game_id = fg.id
 			)
-			AND fgs.free_game_id IS NULL
 		--    AND fgm.mapping_category = 'offer'
-		GROUP BY
-			fg.id,
-			fg.epic_game_id,
-			fg.namespace,
-			fg.title,
-			fg.description,
-			fg.offer_type,
-			fg.status,
-			fg.requires_redemption_code,
-			s."name",
-			d."name",
-			fgm.slug,
-			fgp.promo_tier,
-			fg.fmt_original_price,
-			fg.fmt_discount_price,
-			fg.fmt_intermediate_price,
-			fgp.start_date,
-			fgp.end_date
-		ORDER BY fgp.start_date ASC, fgm.slug ASC;
+		ORDER BY
+			fgp.start_date ASC,
+			fgm.slug ASC;
 	`
 
 	results := []FreeGamesFromDB{}
