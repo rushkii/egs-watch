@@ -45,13 +45,13 @@ func formatFreeNowGames(games []FreeGamesFromDB) string {
 
 		endDate := res.EndDate.Local()
 
-		sb.WriteString(fmt.Sprintf("Title     : %s\n", res.Title))
-		sb.WriteString(fmt.Sprintf("Developer : %s\n", res.Developer))
-		sb.WriteString(fmt.Sprintf("Publisher : %s\n", res.Publisher))
-		sb.WriteString(fmt.Sprintf("Free Now  : Until %02d %s\n", endDate.Day(), endDate.Month()))
+		fmt.Fprintf(&sb, "Title     : %s\n", res.Title)
+		fmt.Fprintf(&sb, "Developer : %s\n", res.Developer)
+		fmt.Fprintf(&sb, "Publisher : %s\n", res.Publisher)
+		fmt.Fprintf(&sb, "Free Now  : Until %02d %s\n", endDate.Day(), endDate.Month())
 
 		if len(res.Slug) > 0 {
-			sb.WriteString(fmt.Sprintf("https://store.epicgames.com/en-US/p/%s\n", res.Slug))
+			fmt.Fprintf(&sb, "https://store.epicgames.com/en-US/p/%s\n", res.Slug)
 		}
 
 		if index != len(games)-1 {

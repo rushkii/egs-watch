@@ -64,13 +64,13 @@ func formatFreeNowGames(games []FGElement) string {
 
 		endDate := res.Promotions.PromotionalOffers[0].PromotionalOffers[0].EndDate.Local()
 
-		sb.WriteString(fmt.Sprintf("Title     : %s\n", res.Title))
-		sb.WriteString(fmt.Sprintf("Developer : %s\n", developer))
-		sb.WriteString(fmt.Sprintf("Publisher : %s\n", publisher))
-		sb.WriteString(fmt.Sprintf("Free Now  : Until %02d %s\n", endDate.Day(), endDate.Month()))
+		fmt.Fprintf(&sb, "Title     : %s\n", res.Title)
+		fmt.Fprintf(&sb, "Developer : %s\n", developer)
+		fmt.Fprintf(&sb, "Publisher : %s\n", publisher)
+		fmt.Fprintf(&sb, "Free Now  : Until %02d %s\n", endDate.Day(), endDate.Month())
 
 		if len(res.CatalogNs.Mappings) > 0 {
-			sb.WriteString(fmt.Sprintf("https://store.epicgames.com/en-US/p/%s\n", res.CatalogNs.Mappings[0].PageSlug))
+			fmt.Fprintf(&sb, "https://store.epicgames.com/en-US/p/%s\n", res.CatalogNs.Mappings[0].PageSlug)
 		}
 
 		if index != len(games)-1 {
@@ -96,7 +96,7 @@ func formatFreeUpcomingGames(games []FGElement) string {
 		startDate := res.Promotions.UpcomingPromotionalOffers[0].PromotionalOffers[0].StartDate.Local()
 		endDate := res.Promotions.UpcomingPromotionalOffers[0].PromotionalOffers[0].EndDate.Local()
 
-		sb.WriteString(fmt.Sprintf("- %s (%02d %s - %02d %s)\n", res.Title, startDate.Day(), startDate.Month(), endDate.Day(), endDate.Month()))
+		fmt.Fprintf(&sb, "- %s (%02d %s - %02d %s)\n", res.Title, startDate.Day(), startDate.Month(), endDate.Day(), endDate.Month())
 	}
 
 	sb.WriteString("--- END OF UPCOMING ---```\n")
