@@ -452,28 +452,36 @@ func (r *gamesRepository) GetFreeGamesFromDB() (FreeGamesFilteredFromDB, error) 
 }
 
 func (r *gamesRepository) CleanupFreeGames() (int64, error) {
-	query := `DELETE FROM free_games WHERE created_at < NOW() - INTERVAL '2 weeks';`
+	query := `
+		DELETE FROM free_games
+		WHERE id IN (
+			SELECT DISTINCT fg.id
+			FROM free_games fg
+			JOIN (
+				SELECT DISTINCT
+					free_game_id,
+					promo_tier,
+					start_date,
+					end_date
+				FROM free_game_promotions
+			) fgp ON fgp.free_game_id = fg.id
+			WHERE fgp.end_date < NOW()
+			AND NOT EXISTS (
+				SELECT 1
+				FROM free_game_promotions fgp2
+				WHERE fgp2.free_game_id = fg.id
+				AND fgp2.end_date >= NOW()
+			)
+		);`
 
 	result, err := r.db.Exec(query)
 	if err != nil {
-		return 0, fmt.Errorf("Error while clean up free games root")
+		return 0, fmt.Errorf("Error while cleaning up expired free games: %w", err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("Error while getting affected rows of free games root")
-	}
-
-	query = `DELETE FROM free_games_sent WHERE created_at < NOW() - INTERVAL '2 weeks';`
-
-	result, err = r.db.Exec(query)
-	if err != nil {
-		return 0, fmt.Errorf("Error while clean up free games sent")
-	}
-
-	rows, err = result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("Error while getting affected rows of free games sent")
+		return 0, fmt.Errorf("Error while getting affected rows of free games cleanup: %w", err)
 	}
 
 	return rows, nil
