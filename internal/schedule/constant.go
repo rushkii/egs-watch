@@ -2,6 +2,7 @@ package schedule
 
 const (
 	RUN_EVERY_HOUR          = "0 * * * *"
+	RUN_EVERY_HOUR_AT_MIN_5 = "5 * * * *"
 	RUN_EVERY_DAY_AT_0AM    = "0 0 * * *"
 	RUN_EVERY_DAY_AT_5AM    = "0 5 * * *"
 	RUN_EVERY_DAY_AT_10AM   = "0 10 * * *"

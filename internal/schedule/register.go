@@ -1,8 +1,8 @@
 package schedule
 
 func (s *Scheduler) PrepareJobs() {
-	s.Cron.AddFunc(RUN_EVERY_DAY_AT_0AM, func() {
-		// clean up old data that stale for 2 weeks+
+	s.Cron.AddFunc(RUN_EVERY_HOUR_AT_MIN_5, func() {
+		// clean up stale free games every hour at minute 5
 		s.TriggerCleanup()
 	})
 
